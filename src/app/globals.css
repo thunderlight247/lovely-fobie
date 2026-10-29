@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme {
+  --color-rose-gold: #d9a99a;
+  --color-nude: #f6ece6;
+  --color-sage: #a9bfa9;
+  --color-emerald-deep: #1f4a3a;
+  --color-ink: #23201e;
+  --font-serif: "Playfair Display", Georgia, Cambria, serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+html { scroll-behavior: auto; }
+html.lenis, html.lenis body { height: auto; }
+body { background: #fffaf7; color: var(--color-ink); font-family: var(--font-sans); }
+
+.marquee { animation: marquee 30s linear infinite; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+
+.shimmer { position: relative; overflow: hidden; }
+.shimmer::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.35) 50%, transparent 65%);
+  transform: translateX(-100%); animation: shimmer 3s infinite;
+}
+@keyframes shimmer { to { transform: translateX(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee, .shimmer::after { animation: none; }
+}
+:focus-visible { outline: 2px solid var(--color-emerald-deep); outline-offset: 3px; }
