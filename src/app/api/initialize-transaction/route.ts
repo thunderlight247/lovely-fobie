@@ -60,6 +60,10 @@ export async function POST(request: Request) {
     );
   }
 
+  const origin = request.headers.get("origin") || request.headers.get("referer") || "http://localhost:3000";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
+  const callbackUrl = `${siteUrl.replace(/\/$/, "")}/contact?status=deposit_success`;
+
   const secretKey = process.env.PAYSTACK_SECRET_KEY;
 
   // If secret key is provided, initialize standard Paystack checkout
@@ -77,6 +81,7 @@ export async function POST(request: Request) {
             email,
             amount: amountInPesewas,
             currency: "GHS",
+            callback_url: callbackUrl,
             metadata: isRecord(metadata) ? metadata : {},
           }),
           cache: "no-store",
@@ -114,13 +119,11 @@ export async function POST(request: Request) {
   }
 
   // Graceful Sandbox Simulation:
-  // When running locally or before the user sets PAYSTACK_SECRET_KEY,
-  // provide a simulated sandbox response with a test reference and confirmation
   const testRef = `PSTK-TEST-${Date.now().toString(36).toUpperCase()}`;
   return NextResponse.json({
-    authorization_url: `https://checkout.paystack.com/simulate-sandbox?ref=${testRef}`,
+    authorization_url: `${callbackUrl}&reference=${testRef}`,
     reference: testRef,
     isSandboxDemo: true,
-    message: "Sandbox test mode initialized. You can confirm deposit and finalize booking.",
+    message: "Sandbox test mode initialized.",
   });
 }

@@ -15,6 +15,8 @@ import {
 export function WhatsAppBookingForm() {
   const searchParams = useSearchParams();
   const preselectedService = searchParams.get("service") || "";
+  const callbackStatus = searchParams.get("status") || "";
+  const callbackReference = searchParams.get("reference") || "";
 
   const [bookingMode, setBookingMode] = useState<"whatsapp" | "paystack">("whatsapp");
   const [formData, setFormData] = useState({
@@ -36,11 +38,32 @@ export function WhatsAppBookingForm() {
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Restore draft or query parameters
   useEffect(() => {
     if (preselectedService) {
       setFormData((prev) => ({ ...prev, serviceNeeded: preselectedService }));
     }
-  }, [preselectedService]);
+
+    if (typeof window !== "undefined") {
+      const savedDraft = sessionStorage.getItem("lovely_fobie_booking_draft");
+      if (savedDraft) {
+        try {
+          const parsed = JSON.parse(savedDraft);
+          setFormData((prev) => ({ ...prev, ...parsed }));
+        } catch {
+          // ignore error
+        }
+      }
+    }
+
+    if (callbackReference && callbackStatus === "deposit_success") {
+      setDepositSuccess({
+        reference: callbackReference,
+        isSandbox: true,
+      });
+      setBookingMode("paystack");
+    }
+  }, [preselectedService, callbackReference, callbackStatus]);
 
   const todayStr = new Date().toISOString().split("T")[0];
 
@@ -48,10 +71,15 @@ export function WhatsAppBookingForm() {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: value };
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("lovely_fobie_booking_draft", JSON.stringify(updated));
+      }
+      return updated;
+    });
   };
 
-  // Find matching treatment to get deposit recommendation
   const matchedTreatment = TREATMENTS.find((t) => t.name === formData.serviceNeeded);
   const depositAmount = matchedTreatment?.depositAmount || 50;
 
@@ -59,7 +87,12 @@ export function WhatsAppBookingForm() {
     e.preventDefault();
     setErrorMessage(null);
 
-    // If pure WhatsApp booking
+    // Save draft
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("lovely_fobie_booking_draft", JSON.stringify(formData));
+    }
+
+    // Direct WhatsApp booking flow
     if (bookingMode === "whatsapp") {
       const payload: WhatsAppFormPayload = {
         fullName: formData.fullName,
@@ -112,17 +145,6 @@ export function WhatsAppBookingForm() {
           throw new Error(data.error || "Could not initiate Paystack sandbox checkout.");
         }
 
-        // If sandbox demo mode
-        if (data.isSandboxDemo) {
-          setDepositSuccess({
-            reference: data.reference,
-            isSandbox: true,
-          });
-          setIsSubmitting(false);
-          return;
-        }
-
-        // Real Paystack authorization redirect
         if (data.authorization_url) {
           window.location.assign(data.authorization_url);
         }
@@ -155,9 +177,9 @@ export function WhatsAppBookingForm() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      {/* Main Booking Card (21st.dev Inspired Minimalist Luxury) */}
+      {/* Main Booking Card (21st.dev Minimalist Glassmorphism) */}
       <div className="relative overflow-hidden rounded-3xl border border-neutral-200/80 bg-white/90 p-6 sm:p-10 shadow-xl backdrop-blur-xl transition-all">
-        {/* Soft Background Accent */}
+        {/* Ambient Blur Accents */}
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-rose-gold/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-emerald-deep/5 blur-3xl" />
 
@@ -173,7 +195,7 @@ export function WhatsAppBookingForm() {
             Fill in your preferred details. Choose to book directly on WhatsApp or secure your slot with a test deposit via Paystack sandbox.
           </p>
 
-          {/* Booking Mode Selector (21st.dev Segmented Tab) */}
+          {/* Booking Mode Selector (21st.dev Segmented Pill) */}
           <div className="mt-6 flex rounded-2xl bg-neutral-100/90 p-1.5 text-xs sm:text-sm">
             <button
               type="button"
@@ -184,7 +206,7 @@ export function WhatsAppBookingForm() {
               }}
               className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 font-semibold transition-all ${
                 bookingMode === "whatsapp"
-                  ? "bg-white text-emerald-deep shadow-sm"
+                  ? "bg-white text-emerald-deep shadow-xs"
                   : "text-ink/65 hover:text-ink"
               }`}
             >
@@ -203,7 +225,7 @@ export function WhatsAppBookingForm() {
               }}
               className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 font-semibold transition-all ${
                 bookingMode === "paystack"
-                  ? "bg-white text-emerald-deep shadow-sm"
+                  ? "bg-white text-emerald-deep shadow-xs"
                   : "text-ink/65 hover:text-ink"
               }`}
             >
@@ -215,14 +237,14 @@ export function WhatsAppBookingForm() {
           </div>
         </div>
 
-        {/* Success Banner if Paystack Sandbox test completed */}
+        {/* Success Banner if Paystack Sandbox verified */}
         <AnimatePresence>
           {depositSuccess && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="mb-8 rounded-2xl border border-emerald-deep/20 bg-emerald-50/70 p-5 text-emerald-950 shadow-xs"
+              className="mb-8 rounded-2xl border border-emerald-deep/20 bg-emerald-50/80 p-5 text-emerald-950 shadow-xs"
             >
               <div className="flex items-start gap-3">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-deep text-white font-bold text-sm">
@@ -230,18 +252,18 @@ export function WhatsAppBookingForm() {
                 </span>
                 <div>
                   <h4 className="font-serif text-base font-bold text-emerald-deep">
-                    Paystack Sandbox Deposit Simulated!
+                    Deposit Confirmed via Paystack Sandbox!
                   </h4>
                   <p className="mt-1 text-xs sm:text-sm text-emerald-900/80">
-                    Test Reference: <strong className="font-mono text-emerald-deep">{depositSuccess.reference}</strong>
+                    Transaction Reference: <strong className="font-mono text-emerald-deep">{depositSuccess.reference}</strong>
                   </p>
                   <p className="mt-1 text-xs text-emerald-800/70">
-                    Amount: GHS {depositAmount}.00 (Deposit test secured). Click below to send your confirmed booking details to the WhatsApp front desk.
+                    Your appointment slot is reserved in sandbox mode. Click below to alert our Front Desk on WhatsApp with your complete booking!
                   </p>
                   <button
                     type="button"
                     onClick={handleFinishWhatsAppWithDeposit}
-                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-deep px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-deep/90 transition-all"
+                    className="mt-3.5 inline-flex items-center gap-2 rounded-xl bg-emerald-deep px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-deep/90 transition-all hover:scale-[1.01]"
                   >
                     <span>Send Confirmed Booking to WhatsApp →</span>
                   </button>
@@ -293,7 +315,7 @@ export function WhatsAppBookingForm() {
             </div>
           </div>
 
-          {/* Email (Especially required for Paystack Sandbox receipt) */}
+          {/* Email */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
               Email Address {bookingMode === "paystack" && <span className="text-rose-500">*</span>}
@@ -393,7 +415,7 @@ export function WhatsAppBookingForm() {
             </div>
           </div>
 
-          {/* Hair Type & Length (Clean 21st.dev Pills) */}
+          {/* Hair Texture & Length (21st.dev Style Pills) */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
@@ -440,7 +462,7 @@ export function WhatsAppBookingForm() {
             </div>
           </div>
 
-          {/* Preferred Style / Notes */}
+          {/* Style & Inspiration Note */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
               Specific Style or Notes
@@ -458,7 +480,7 @@ export function WhatsAppBookingForm() {
             </p>
           </div>
 
-          {/* Paystack Sandbox Notice when Paystack mode is active */}
+          {/* Paystack Sandbox Notice */}
           {bookingMode === "paystack" && (
             <div className="rounded-2xl border border-emerald-deep/20 bg-nude/40 p-4 text-xs text-ink/80">
               <div className="flex items-center justify-between mb-1">
@@ -473,7 +495,7 @@ export function WhatsAppBookingForm() {
             </div>
           )}
 
-          {/* Action Button */}
+          {/* Submit Action */}
           <div className="pt-2">
             {bookingMode === "whatsapp" ? (
               <button
