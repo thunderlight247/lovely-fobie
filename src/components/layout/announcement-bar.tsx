@@ -1,5 +1,5 @@
 const MESSAGE =
-  "✨ Verified PharmD-Led Consultations | 🗓️ Open Mon, Tue, Wed, Fri, Sat (9am – 8pm) | ⏰ Booking Slots: 9am, 12pm & 3pm | 📍 Dave Junction, Ho | 💵 Cash-Only Facility";
+  "✨ Verified PharmD-Led Beauty Consultations • Dave Junction, Ho, Ghana • Appointments Recommended";
 
 export function AnnouncementBar() {
   return (

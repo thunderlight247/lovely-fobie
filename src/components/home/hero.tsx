@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { AuroraBackground } from "@/components/ui/aurora-background";
-import { PILLARS, WHATSAPP_URL, BOOKING_TIMES } from "@/lib/site";
+import { PILLARS, WHATSAPP_URL } from "@/lib/site";
 
 export function Hero() {
   const [index, setIndex] = useState(0);
@@ -30,11 +30,11 @@ export function Hero() {
           transition={{ duration: 0.7, ease: "easeOut" }}
           className="md:col-span-7"
         >
-          {/* PharmD Trust Badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-rose-gold/40 bg-white/70 px-4 py-1.5 text-xs sm:text-sm font-medium text-emerald-deep shadow-xs backdrop-blur-md">
-            <span className="flex h-2 w-2 rounded-full bg-[#25D366] animate-pulse" />
+          {/* Trust Badge */}
+          <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200/80 bg-white/80 px-4 py-1.5 text-xs sm:text-sm font-medium text-emerald-deep shadow-2xs backdrop-blur-md">
+            <span className="flex h-2 w-2 rounded-full bg-[#25D366]" />
             <span className="font-semibold">PharmD Led</span>
-            <span className="text-ink/40">•</span>
+            <span className="text-ink/30">•</span>
             <span>Doctor of Pharmacy Supervised Beauty Sanctuary</span>
           </div>
 
@@ -43,61 +43,42 @@ export function Hero() {
             <span className="italic font-normal text-[#8d4757]">Timeless Glamour.</span>
           </h1>
 
-          <p className="mt-5 max-w-xl text-base sm:text-lg text-ink/80 leading-relaxed">
+          <p className="mt-5 max-w-xl text-base sm:text-lg text-ink/75 leading-relaxed">
             Personalized natural hair care, bridal & soft glam artistry, and clinical skincare consultations
             at Dave Junction, Ho, Ghana. Crafted with pharmaceutical precision and gentle beauty rituals.
           </p>
 
-          {/* Booking Slots Pill Notice */}
-          <div className="mt-6 inline-flex flex-wrap items-center gap-2 rounded-2xl bg-nude/80 border border-rose-gold/30 p-3 text-xs sm:text-sm text-ink/80 shadow-xs">
-            <span className="font-semibold text-emerald-deep flex items-center gap-1">
-              <span>⏰</span> Daily Booking Times:
-            </span>
-            <div className="flex gap-1.5 flex-wrap">
-              {BOOKING_TIMES.map((time) => (
-                <span
-                  key={time}
-                  className="rounded-lg bg-white px-2.5 py-0.5 font-medium text-emerald-deep shadow-xs border border-rose-gold/20"
-                >
-                  {time}
-                </span>
-              ))}
-            </div>
-          </div>
-
           {/* Action Buttons */}
           <div className="mt-8 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
             <Link
-              href="/contact#booking-form"
-              className="shimmer flex items-center justify-center gap-2 rounded-full bg-emerald-deep px-7 py-3.5 text-sm sm:text-base font-semibold text-white shadow-lg hover:bg-emerald-deep/90 transition-all hover:scale-[1.02] active:scale-[0.98] text-center"
+              href="/contact"
+              className="shimmer flex items-center justify-center gap-2 rounded-full bg-emerald-deep px-7 py-3.5 text-sm sm:text-base font-semibold text-white shadow-md hover:bg-emerald-deep/90 transition-all hover:scale-[1.01] active:scale-[0.99] text-center"
             >
-              <span>✨ Book Hair & Glam</span>
+              <span>Book Appointment</span>
+              <span>→</span>
             </Link>
 
-            <a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 rounded-full border border-emerald-deep/30 bg-white/70 px-6 py-3.5 text-sm sm:text-base font-medium text-emerald-deep shadow-xs hover:bg-white hover:border-emerald-deep transition-all text-center"
+            <Link
+              href="/services"
+              className="flex items-center justify-center gap-2 rounded-full border border-neutral-200 bg-white/80 px-6 py-3.5 text-sm sm:text-base font-medium text-ink hover:bg-white hover:border-emerald-deep/40 transition-all text-center"
             >
-              <span>Chat Front Desk</span>
-              <span className="text-emerald-deep">→</span>
-            </a>
+              <span>Explore Services</span>
+            </Link>
           </div>
 
-          {/* Quick Metrics Bar */}
-          <div className="mt-10 grid grid-cols-3 gap-3 border-t border-rose-gold/20 pt-6">
+          {/* Quick Metrics (21st.dev Style Clean Stats) */}
+          <div className="mt-10 grid grid-cols-3 gap-4 border-t border-neutral-200/60 pt-6">
             <div>
               <p className="font-serif text-xl sm:text-2xl font-bold text-emerald-deep">PharmD</p>
-              <p className="text-xs text-ink/65">Skin Health Expert</p>
+              <p className="text-xs text-ink/60">Evidence-Based</p>
             </div>
             <div>
-              <p className="font-serif text-xl sm:text-2xl font-bold text-emerald-deep">5 Days/Wk</p>
-              <p className="text-xs text-ink/65">Mon-Wed, Fri-Sat</p>
+              <p className="font-serif text-xl sm:text-2xl font-bold text-emerald-deep">Ho, Ghana</p>
+              <p className="text-xs text-ink/60">Dave Junction</p>
             </div>
             <div>
-              <p className="font-serif text-xl sm:text-2xl font-bold text-emerald-deep">3 Slots</p>
-              <p className="text-xs text-ink/65">9am, 12pm & 3pm</p>
+              <p className="font-serif text-xl sm:text-2xl font-bold text-emerald-deep">100%</p>
+              <p className="text-xs text-ink/60">Botanical & Safe</p>
             </div>
           </div>
         </motion.div>
@@ -108,16 +89,16 @@ export function Hero() {
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
         >
-          {/* Pillar Selector Tabs */}
-          <div className="mb-3 flex items-center justify-between gap-1 rounded-2xl bg-white/80 p-1.5 shadow-sm border border-rose-gold/20 backdrop-blur-md">
+          {/* Segmented Switcher Tabs */}
+          <div className="mb-3 flex items-center justify-between gap-1 rounded-2xl bg-white/90 p-1.5 shadow-xs border border-neutral-200/70 backdrop-blur-md">
             {PILLARS.map((p, i) => (
               <button
                 key={p.id}
                 onClick={() => setIndex(i)}
                 className={`flex-1 rounded-xl py-2 px-2 text-xs font-semibold transition-all ${
                   index === i
-                    ? "bg-emerald-deep text-white shadow-sm"
-                    : "text-ink/70 hover:text-ink hover:bg-nude/60"
+                    ? "bg-emerald-deep text-white shadow-xs"
+                    : "text-ink/70 hover:text-ink hover:bg-neutral-100"
                 }`}
               >
                 {p.id === "hair" ? "💇 Hair" : p.id === "makeup" ? "💄 Makeup" : "🌿 Skin"}
@@ -126,15 +107,15 @@ export function Hero() {
           </div>
 
           {/* Visual Showcase Card */}
-          <div className="relative mx-auto aspect-[4/5] w-full max-w-md overflow-hidden rounded-[2rem] shadow-2xl border-2 border-white/60">
+          <div className="relative mx-auto aspect-[4/5] w-full max-w-md overflow-hidden rounded-[2rem] shadow-xl border-2 border-white/80 bg-neutral-900">
             <AnimatePresence mode="wait">
               <motion.figure
                 key={pillar.id}
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 1.03 }}
-                transition={{ duration: 0.45, ease: "easeOut" }}
-                className="absolute inset-0 h-full w-full bg-neutral-900"
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="absolute inset-0 h-full w-full"
               >
                 {/* Real High-Resolution Image */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -146,11 +127,11 @@ export function Hero() {
                 />
 
                 {/* Aesthetic Gradient Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
 
                 {/* Top Badge */}
                 <div className="absolute top-4 left-4">
-                  <span className="rounded-full bg-white/90 backdrop-blur-md px-3.5 py-1 text-xs font-bold text-emerald-deep shadow-md">
+                  <span className="rounded-full bg-white/95 backdrop-blur-md px-3.5 py-1 text-xs font-bold text-emerald-deep shadow-xs">
                     {pillar.badge}
                   </span>
                 </div>
@@ -168,10 +149,10 @@ export function Hero() {
                   </p>
 
                   <div className="mt-4 flex items-center justify-between border-t border-white/20 pt-3">
-                    <span className="text-xs text-white/75">{pillar.services.length} specialty services</span>
+                    <span className="text-xs text-white/75">{pillar.treatments.length} specialty treatments</span>
                     <Link
-                      href={`/#${pillar.id}`}
-                      className="rounded-full bg-white/90 px-3.5 py-1.5 text-xs font-bold text-emerald-deep hover:bg-white transition-colors"
+                      href={`/services/${pillar.id}`}
+                      className="rounded-full bg-white/95 px-3.5 py-1.5 text-xs font-bold text-emerald-deep hover:bg-white transition-colors"
                     >
                       View Details →
                     </Link>
@@ -188,7 +169,7 @@ export function Hero() {
                 key={i}
                 onClick={() => setIndex(i)}
                 aria-label={`View slide ${i + 1}`}
-                className={`h-2 rounded-full transition-all ${
+                className={`h-1.5 rounded-full transition-all ${
                   index === i ? "w-8 bg-emerald-deep" : "w-2 bg-emerald-deep/30"
                 }`}
               />

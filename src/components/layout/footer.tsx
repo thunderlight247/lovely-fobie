@@ -5,33 +5,33 @@ export function Footer() {
   const mapQuery = encodeURIComponent(BUSINESS.address);
 
   return (
-    <footer id="contact" className="bg-emerald-deep text-white border-t border-rose-gold/20">
+    <footer id="contact" className="bg-emerald-deep text-white border-t border-white/10">
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 md:py-16">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           {/* Brand Info */}
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-emerald-deep font-serif text-lg font-bold">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-emerald-deep font-serif text-lg font-bold">
                 L
               </span>
               <p className="font-serif text-xl font-bold">{BUSINESS.name}</p>
             </div>
             <p className="mt-3 text-xs sm:text-sm text-white/70 leading-relaxed">
-              In partnership with {BUSINESS.partner}. Providing science-backed hair, skin, and beauty solutions led by a Doctor of Pharmacy.
+              In partnership with {BUSINESS.partner}. Science-backed hair, skin, and beauty solutions led by a Doctor of Pharmacy.
             </p>
             <div className="mt-4">
               <Link
                 href="/contact"
                 className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-rose-gold hover:bg-white/20 transition-colors border border-white/15"
               >
-                <span>✨ WhatsApp Booking Form →</span>
+                <span>Book an Appointment →</span>
               </Link>
             </div>
           </div>
 
           {/* Visit & Contact */}
           <address className="text-sm not-italic">
-            <p className="font-serif font-bold text-base text-rose-gold">Visit Us</p>
+            <p className="font-serif font-bold text-base text-rose-gold">Studio Location</p>
             <p className="mt-2.5 text-white/80">{BUSINESS.address}</p>
             <a
               className="mt-3 block font-semibold text-white hover:text-rose-gold transition-colors"
@@ -76,13 +76,13 @@ export function Footer() {
           <div>
             <p className="font-serif font-bold text-base text-rose-gold mb-2.5">Find Studio</p>
             <p className="text-xs text-white/70 mb-3">
-              Dave Junction, Ho, Volta Region. Easy access and secure parking available.
+              Dave Junction, Ho, Volta Region. Easy access and parking available.
             </p>
             <a
               href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="grid min-h-28 place-items-center rounded-2xl border border-white/20 bg-[repeating-linear-gradient(45deg,rgba(255,255,255,0.06)_0_8px,transparent_8px_16px)] text-sm transition-transform hover:scale-[1.02] p-4 text-center"
+              className="grid min-h-24 place-items-center rounded-2xl border border-white/20 bg-white/5 text-sm transition-transform hover:scale-[1.02] p-4 text-center"
             >
               <span className="rounded-full bg-white px-4 py-2 font-semibold text-xs text-emerald-deep shadow-md">
                 🗺️ Open in Google Maps
@@ -96,9 +96,9 @@ export function Footer() {
           <p>© {new Date().getFullYear()} {BUSINESS.fullName}. All rights reserved.</p>
           <div className="flex gap-4">
             <Link href="/" className="hover:text-white transition-colors">Home</Link>
-            <Link href="/#services" className="hover:text-white transition-colors">Services</Link>
+            <Link href="/services" className="hover:text-white transition-colors">Services</Link>
             <Link href="/#policy" className="hover:text-white transition-colors">Salon Policy</Link>
-            <Link href="/contact" className="hover:text-white transition-colors">Contact & Book</Link>
+            <Link href="/contact" className="hover:text-white transition-colors">Book & Contact</Link>
           </div>
         </div>
       </div>

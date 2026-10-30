@@ -2,54 +2,46 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   BOOKING_TIMES,
   HAIR_TYPES,
   HAIR_LENGTHS,
-  WHATSAPP_NUMBER,
-  formatWhatsAppBookingMessage,
+  TREATMENTS,
   generateWhatsAppBookingUrl,
+  WhatsAppFormPayload,
 } from "@/lib/site";
-
-const POPULAR_SERVICES = [
-  "Wash & Go / Wash & Twist",
-  "Deep Moisture Conditioning (Steam Hydration)",
-  "Bentonite Clay Scalp Detox",
-  "Ayurvedic & Protein Treatment",
-  "Soft Glam Makeup Artistry",
-  "Luxury Bridal Makeup Package",
-  "Full Glam / Event Makeup",
-  "PharmD Skin Health Consultation",
-  "Hair & Scalp Health Consultation",
-  "Other / Custom Service",
-];
 
 export function WhatsAppBookingForm() {
   const searchParams = useSearchParams();
   const preselectedService = searchParams.get("service") || "";
 
+  const [bookingMode, setBookingMode] = useState<"whatsapp" | "paystack">("whatsapp");
   const [formData, setFormData] = useState({
     fullName: "",
     phone: "",
+    email: "",
     preferredDate: "",
     preferredTime: "9:00 AM",
-    serviceNeeded: preselectedService || "Wash & Go / Wash & Twist",
+    serviceNeeded: preselectedService || TREATMENTS[0].name,
     hairType: "Natural",
     hairLength: "Medium",
     preferredStyle: "",
   });
 
-  const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<"form" | "preview">("form");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [depositSuccess, setDepositSuccess] = useState<{
+    reference: string;
+    isSandbox: boolean;
+  } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // If query string updates, update service
   useEffect(() => {
     if (preselectedService) {
       setFormData((prev) => ({ ...prev, serviceNeeded: preselectedService }));
     }
   }, [preselectedService]);
 
-  // Set min date to today's date formatted as YYYY-MM-DD
   const todayStr = new Date().toISOString().split("T")[0];
 
   const handleInputChange = (
@@ -59,232 +51,364 @@ export function WhatsAppBookingForm() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleTimeSelect = (time: string) => {
-    setFormData((prev) => ({ ...prev, preferredTime: time }));
-  };
+  // Find matching treatment to get deposit recommendation
+  const matchedTreatment = TREATMENTS.find((t) => t.name === formData.serviceNeeded);
+  const depositAmount = matchedTreatment?.depositAmount || 50;
 
-  const handleHairTypeSelect = (type: string) => {
-    setFormData((prev) => ({ ...prev, hairType: type }));
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
 
-  const handleHairLengthSelect = (length: string) => {
-    setFormData((prev) => ({ ...prev, hairLength: length }));
-  };
+    // If pure WhatsApp booking
+    if (bookingMode === "whatsapp") {
+      const payload: WhatsAppFormPayload = {
+        fullName: formData.fullName,
+        phone: formData.phone,
+        email: formData.email,
+        preferredDate: formData.preferredDate,
+        preferredTime: formData.preferredTime,
+        serviceNeeded: formData.serviceNeeded,
+        hairType: formData.hairType,
+        hairLength: formData.hairLength,
+        preferredStyle: formData.preferredStyle,
+      };
+      const url = generateWhatsAppBookingUrl(payload);
+      window.open(url, "_blank");
+      return;
+    }
 
-  const messageText = formatWhatsAppBookingMessage(formData);
-  const whatsappUrl = generateWhatsAppBookingUrl(formData);
+    // Paystack Sandbox Deposit Flow
+    if (bookingMode === "paystack") {
+      if (!formData.email) {
+        setErrorMessage("Please enter an email address to receive your Paystack deposit receipt.");
+        return;
+      }
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(messageText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      // Fallback
+      setIsSubmitting(true);
+      try {
+        const response = await fetch("/api/initialize-transaction", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: formData.email,
+            amount: depositAmount,
+            metadata: {
+              fullName: formData.fullName,
+              phone: formData.phone,
+              preferredDate: formData.preferredDate,
+              preferredTime: formData.preferredTime,
+              serviceNeeded: formData.serviceNeeded,
+              hairType: formData.hairType,
+              hairLength: formData.hairLength,
+              preferredStyle: formData.preferredStyle,
+              purpose: "Salon Appointment Deposit",
+            },
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || data.error) {
+          throw new Error(data.error || "Could not initiate Paystack sandbox checkout.");
+        }
+
+        // If sandbox demo mode
+        if (data.isSandboxDemo) {
+          setDepositSuccess({
+            reference: data.reference,
+            isSandbox: true,
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Real Paystack authorization redirect
+        if (data.authorization_url) {
+          window.location.assign(data.authorization_url);
+        }
+      } catch (err) {
+        setErrorMessage(
+          err instanceof Error ? err.message : "Failed to initialize Paystack sandbox checkout."
+        );
+        setIsSubmitting(false);
+      }
     }
   };
 
+  const handleFinishWhatsAppWithDeposit = () => {
+    if (!depositSuccess) return;
+    const payload: WhatsAppFormPayload = {
+      fullName: formData.fullName,
+      phone: formData.phone,
+      email: formData.email,
+      preferredDate: formData.preferredDate,
+      preferredTime: formData.preferredTime,
+      serviceNeeded: formData.serviceNeeded,
+      hairType: formData.hairType,
+      hairLength: formData.hairLength,
+      preferredStyle: formData.preferredStyle,
+      depositReference: depositSuccess.reference,
+    };
+    const url = generateWhatsAppBookingUrl(payload);
+    window.open(url, "_blank");
+  };
+
   return (
-    <div className="rounded-3xl border border-rose-gold/30 bg-white shadow-2xl overflow-hidden">
-      {/* WhatsApp Inspired Header Banner */}
-      <div className="bg-[#075E54] text-white p-5 sm:p-7">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white font-serif text-xl font-bold shadow-md">
-              <span>L</span>
-              <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-white border-2 border-[#075E54] flex items-center justify-center">
-                <span className="h-2 w-2 rounded-full bg-[#25D366]" />
+    <div className="mx-auto max-w-3xl">
+      {/* Main Booking Card (21st.dev Inspired Minimalist Luxury) */}
+      <div className="relative overflow-hidden rounded-3xl border border-neutral-200/80 bg-white/90 p-6 sm:p-10 shadow-xl backdrop-blur-xl transition-all">
+        {/* Soft Background Accent */}
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-rose-gold/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-emerald-deep/5 blur-3xl" />
+
+        {/* Card Header */}
+        <div className="relative mb-8 border-b border-neutral-100 pb-6">
+          <div className="inline-flex items-center gap-2 rounded-full bg-nude px-3 py-1 text-xs font-semibold text-emerald-deep">
+            <span>✨</span> Private Appointment Booking
+          </div>
+          <h2 className="mt-2 font-serif text-2xl sm:text-3xl font-medium tracking-tight text-emerald-deep">
+            Reserve Your Session
+          </h2>
+          <p className="mt-1.5 text-xs sm:text-sm text-ink/70">
+            Fill in your preferred details. Choose to book directly on WhatsApp or secure your slot with a test deposit via Paystack sandbox.
+          </p>
+
+          {/* Booking Mode Selector (21st.dev Segmented Tab) */}
+          <div className="mt-6 flex rounded-2xl bg-neutral-100/90 p-1.5 text-xs sm:text-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setBookingMode("whatsapp");
+                setDepositSuccess(null);
+                setErrorMessage(null);
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 font-semibold transition-all ${
+                bookingMode === "whatsapp"
+                  ? "bg-white text-emerald-deep shadow-sm"
+                  : "text-ink/65 hover:text-ink"
+              }`}
+            >
+              <span>💬 Book on WhatsApp</span>
+              <span className="rounded-md bg-emerald-deep/10 px-2 py-0.5 text-[11px] text-emerald-deep font-bold">
+                Instant
               </span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-serif text-lg sm:text-xl font-bold">
-                  Lovely Fobie Glam & Health Consult
-                </h3>
-                <span className="rounded-md bg-white/20 px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase">
-                  Verified Front Desk
-                </span>
-              </div>
-              <p className="text-xs text-white/80 mt-0.5">
-                Dave Junction, Ho, Ghana • WhatsApp Booking Assistant
-              </p>
-            </div>
-          </div>
+            </button>
 
-          <div className="flex items-center gap-2 sm:self-center">
-            {/* Mobile View Toggle between Form and Live Message */}
-            <div className="inline-flex lg:hidden rounded-xl bg-black/20 p-1 text-xs">
-              <button
-                type="button"
-                onClick={() => setActiveTab("form")}
-                className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
-                  activeTab === "form" ? "bg-white text-[#075E54] font-bold" : "text-white/80"
-                }`}
-              >
-                📝 Fill Form
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("preview")}
-                className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
-                  activeTab === "preview" ? "bg-white text-[#075E54] font-bold" : "text-white/80"
-                }`}
-              >
-                💬 WhatsApp Preview
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setBookingMode("paystack");
+                setDepositSuccess(null);
+                setErrorMessage(null);
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 font-semibold transition-all ${
+                bookingMode === "paystack"
+                  ? "bg-white text-emerald-deep shadow-sm"
+                  : "text-ink/65 hover:text-ink"
+              }`}
+            >
+              <span>💳 Paystack Sandbox</span>
+              <span className="rounded-md bg-emerald-deep/10 px-2 py-0.5 text-[11px] text-emerald-deep font-bold">
+                Deposit
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* Automated Welcome Note Banner */}
-        <div className="mt-4 rounded-xl bg-black/20 p-3 sm:p-4 text-xs sm:text-sm text-white/90 border border-white/10 leading-relaxed">
-          <p className="font-semibold text-rose-gold mb-1">
-            ✨ Front Desk Automated Welcome:
-          </p>
-          <p>
-            &ldquo;Thank you for contacting Lovely Fobie Glam and Health Consult! Please let us know how we can help you.
-            Our working days are Monday, Tuesday, Wednesday, Friday and Saturday. Time: 9am to 8pm. Booking times are 9am, 12pm and 3pm.&rdquo;
-          </p>
-        </div>
-      </div>
-
-      {/* Main Grid: Form on Left, Live WhatsApp Card on Right */}
-      <div className="grid gap-0 lg:grid-cols-12">
-        {/* Form Column */}
-        <div
-          className={`p-5 sm:p-8 lg:col-span-7 ${
-            activeTab === "preview" ? "hidden lg:block" : "block"
-          }`}
-        >
-          <div className="mb-6 pb-4 border-b border-rose-gold/20">
-            <h4 className="font-serif text-xl sm:text-2xl font-bold text-emerald-deep">
-              ✨ Hair & Glam Appointment Form
-            </h4>
-            <p className="text-xs sm:text-sm text-ink/70 mt-1">
-              Please fill in your details below to generate your direct appointment message 😊
-            </p>
-          </div>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              window.open(whatsappUrl, "_blank");
-            }}
-            className="space-y-5"
-          >
-            {/* Full Name & Phone Number */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-ink/80 mb-1.5">
-                  👤 Full Name <span className="text-rose-600">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="fullName"
-                  required
-                  placeholder="e.g. Ama Mensah"
-                  value={formData.fullName}
-                  onChange={handleInputChange}
-                  className="w-full rounded-xl border border-rose-gold/40 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/40 focus:border-emerald-deep focus:ring-1 focus:ring-emerald-deep focus:outline-none transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-ink/80 mb-1.5">
-                  📞 Phone Number <span className="text-rose-600">*</span>
-                </label>
-                <input
-                  type="tel"
-                  name="phone"
-                  required
-                  placeholder="e.g. 024 123 4567"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  className="w-full rounded-xl border border-rose-gold/40 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/40 focus:border-emerald-deep focus:ring-1 focus:ring-emerald-deep focus:outline-none transition-colors"
-                />
-              </div>
-            </div>
-
-            {/* Preferred Date & Preferred Time */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-ink/80 mb-1.5">
-                  📅 Preferred Date <span className="text-rose-600">*</span>
-                </label>
-                <input
-                  type="date"
-                  name="preferredDate"
-                  min={todayStr}
-                  required
-                  value={formData.preferredDate}
-                  onChange={handleInputChange}
-                  className="w-full rounded-xl border border-rose-gold/40 bg-white px-3.5 py-2.5 text-sm text-ink focus:border-emerald-deep focus:ring-1 focus:ring-emerald-deep focus:outline-none transition-colors"
-                />
-                <span className="text-[11px] text-ink/50 mt-1 block">
-                  Working days: Mon, Tue, Wed, Fri, Sat
+        {/* Success Banner if Paystack Sandbox test completed */}
+        <AnimatePresence>
+          {depositSuccess && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mb-8 rounded-2xl border border-emerald-deep/20 bg-emerald-50/70 p-5 text-emerald-950 shadow-xs"
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-deep text-white font-bold text-sm">
+                  ✓
                 </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-ink/80 mb-1.5">
-                  ⏰ Preferred Time Slot <span className="text-rose-600">*</span>
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {BOOKING_TIMES.map((time) => (
-                    <button
-                      key={time}
-                      type="button"
-                      onClick={() => handleTimeSelect(time)}
-                      className={`rounded-xl py-2.5 px-2 text-xs font-bold transition-all ${
-                        formData.preferredTime === time
-                          ? "bg-emerald-deep text-white shadow-sm ring-2 ring-emerald-deep/20"
-                          : "border border-rose-gold/40 bg-nude/40 text-ink/80 hover:bg-nude"
-                      }`}
-                    >
-                      {time}
-                    </button>
-                  ))}
+                <div>
+                  <h4 className="font-serif text-base font-bold text-emerald-deep">
+                    Paystack Sandbox Deposit Simulated!
+                  </h4>
+                  <p className="mt-1 text-xs sm:text-sm text-emerald-900/80">
+                    Test Reference: <strong className="font-mono text-emerald-deep">{depositSuccess.reference}</strong>
+                  </p>
+                  <p className="mt-1 text-xs text-emerald-800/70">
+                    Amount: GHS {depositAmount}.00 (Deposit test secured). Click below to send your confirmed booking details to the WhatsApp front desk.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleFinishWhatsAppWithDeposit}
+                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-deep px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-deep/90 transition-all"
+                  >
+                    <span>Send Confirmed Booking to WhatsApp →</span>
+                  </button>
                 </div>
-                <span className="text-[11px] text-ink/50 mt-1 block">
-                  Fixed slot booking model (9am, 12pm, 3pm)
-                </span>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50/80 p-4 text-xs sm:text-sm text-rose-900">
+            {errorMessage}
+          </div>
+        )}
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Guest Identity */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
+                Full Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                name="fullName"
+                required
+                placeholder="e.g. Ama Mensah"
+                value={formData.fullName}
+                onChange={handleInputChange}
+                className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm text-ink placeholder:text-ink/35 focus:border-emerald-deep focus:outline-none focus:ring-1 focus:ring-emerald-deep transition-all"
+              />
             </div>
 
-            {/* Service Needed */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-ink/80 mb-1.5">
-                💇🏽‍♀️ Service Needed <span className="text-rose-600">*</span>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
+                Phone Number <span className="text-rose-500">*</span>
               </label>
-              <select
-                name="serviceNeeded"
-                value={formData.serviceNeeded}
+              <input
+                type="tel"
+                name="phone"
+                required
+                placeholder="e.g. 024 123 4567"
+                value={formData.phone}
                 onChange={handleInputChange}
-                className="w-full rounded-xl border border-rose-gold/40 bg-white px-3.5 py-2.5 text-sm text-ink focus:border-emerald-deep focus:ring-1 focus:ring-emerald-deep focus:outline-none transition-colors"
-              >
-                {POPULAR_SERVICES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+                className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm text-ink placeholder:text-ink/35 focus:border-emerald-deep focus:outline-none focus:ring-1 focus:ring-emerald-deep transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Email (Especially required for Paystack Sandbox receipt) */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
+              Email Address {bookingMode === "paystack" && <span className="text-rose-500">*</span>}
+              <span className="text-[11px] font-normal text-ink/50 lowercase ml-1">
+                (for booking summary & deposit receipt)
+              </span>
+            </label>
+            <input
+              type="email"
+              name="email"
+              required={bookingMode === "paystack"}
+              placeholder="e.g. ama@example.com"
+              value={formData.email}
+              onChange={handleInputChange}
+              className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm text-ink placeholder:text-ink/35 focus:border-emerald-deep focus:outline-none focus:ring-1 focus:ring-emerald-deep transition-all"
+            />
+          </div>
+
+          {/* Service Needed Dropdown */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
+              Service / Treatment <span className="text-rose-500">*</span>
+            </label>
+            <select
+              name="serviceNeeded"
+              value={formData.serviceNeeded}
+              onChange={handleInputChange}
+              className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm text-ink focus:border-emerald-deep focus:outline-none focus:ring-1 focus:ring-emerald-deep transition-all"
+            >
+              <optgroup label="Natural Hair Care">
+                {TREATMENTS.filter((t) => t.category === "hair").map((t) => (
+                  <option key={t.slug} value={t.name}>
+                    {t.name} ({t.duration})
                   </option>
                 ))}
-              </select>
+              </optgroup>
+              <optgroup label="Makeup Artistry">
+                {TREATMENTS.filter((t) => t.category === "makeup").map((t) => (
+                  <option key={t.slug} value={t.name}>
+                    {t.name} ({t.duration})
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Skincare & Consultations">
+                {TREATMENTS.filter((t) => t.category === "skin").map((t) => (
+                  <option key={t.slug} value={t.name}>
+                    {t.name} ({t.duration})
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+
+          {/* Date & Time Slot Grid */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
+                Preferred Date <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="date"
+                name="preferredDate"
+                min={todayStr}
+                required
+                value={formData.preferredDate}
+                onChange={handleInputChange}
+                className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm text-ink focus:border-emerald-deep focus:outline-none focus:ring-1 focus:ring-emerald-deep transition-all"
+              />
+              <span className="mt-1 block text-[11px] text-ink/50">
+                Working Days: Mon, Tue, Wed, Fri, Sat
+              </span>
             </div>
 
-            {/* Hair Type (Natural / Relaxed / Locs / Colored) */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-ink/80 mb-1.5">
-                🧵 Hair Type
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
+                Time Window <span className="text-rose-500">*</span>
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                {BOOKING_TIMES.map((time) => (
+                  <button
+                    key={time}
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, preferredTime: time }))}
+                    className={`rounded-xl py-3 px-1 text-xs font-bold transition-all ${
+                      formData.preferredTime === time
+                        ? "bg-emerald-deep text-white shadow-xs"
+                        : "border border-neutral-200 bg-white text-ink/75 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {time}
+                  </button>
+                ))}
+              </div>
+              <span className="mt-1 block text-[11px] text-ink/50">
+                Studio appointment slots
+              </span>
+            </div>
+          </div>
+
+          {/* Hair Type & Length (Clean 21st.dev Pills) */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
+                Hair Texture
+              </label>
+              <div className="grid grid-cols-2 gap-1.5">
                 {HAIR_TYPES.map((type) => (
                   <button
                     key={type}
                     type="button"
-                    onClick={() => handleHairTypeSelect(type)}
-                    className={`rounded-xl py-2 px-2 text-xs font-bold transition-all ${
+                    onClick={() => setFormData((prev) => ({ ...prev, hairType: type }))}
+                    className={`rounded-xl py-2 px-2 text-xs font-semibold transition-all ${
                       formData.hairType === type
                         ? "bg-emerald-deep text-white shadow-xs"
-                        : "border border-rose-gold/30 bg-nude/30 text-ink/80 hover:bg-nude/80"
+                        : "border border-neutral-200 bg-white text-ink/75 hover:bg-neutral-50"
                     }`}
                   >
                     {type}
@@ -293,202 +417,90 @@ export function WhatsAppBookingForm() {
               </div>
             </div>
 
-            {/* Hair Length (Short / Medium / Long) */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-ink/80 mb-1.5">
-                📏 Hair Length
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
+                Hair Length
               </label>
-              <div className="grid grid-cols-3 gap-2">
-                {HAIR_LENGTHS.map((length) => (
+              <div className="grid grid-cols-3 gap-1.5">
+                {HAIR_LENGTHS.map((len) => (
                   <button
-                    key={length}
+                    key={len}
                     type="button"
-                    onClick={() => handleHairLengthSelect(length)}
-                    className={`rounded-xl py-2 px-2 text-xs font-bold transition-all ${
-                      formData.hairLength === length
+                    onClick={() => setFormData((prev) => ({ ...prev, hairLength: len }))}
+                    className={`rounded-xl py-2 px-2 text-xs font-semibold transition-all ${
+                      formData.hairLength === len
                         ? "bg-emerald-deep text-white shadow-xs"
-                        : "border border-rose-gold/30 bg-nude/30 text-ink/80 hover:bg-nude/80"
+                        : "border border-neutral-200 bg-white text-ink/75 hover:bg-neutral-50"
                     }`}
                   >
-                    {length}
+                    {len}
                   </button>
                 ))}
               </div>
             </div>
+          </div>
 
-            {/* Preferred Style */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-ink/80 mb-1.5">
-                🎨 Preferred Style
-              </label>
-              <input
-                type="text"
-                name="preferredStyle"
-                placeholder="e.g. Chunky Two-Strand Twists with deep scalp steam or Soft Glam Bridal"
-                value={formData.preferredStyle}
-                onChange={handleInputChange}
-                className="w-full rounded-xl border border-rose-gold/40 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/40 focus:border-emerald-deep focus:ring-1 focus:ring-emerald-deep focus:outline-none transition-colors"
-              />
-            </div>
+          {/* Preferred Style / Notes */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-ink/75 mb-1.5">
+              Specific Style or Notes
+            </label>
+            <input
+              type="text"
+              name="preferredStyle"
+              placeholder="e.g. Chunky twists, steam scalp focus, or bridal theme"
+              value={formData.preferredStyle}
+              onChange={handleInputChange}
+              className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm text-ink placeholder:text-ink/35 focus:border-emerald-deep focus:outline-none focus:ring-1 focus:ring-emerald-deep transition-all"
+            />
+            <p className="mt-1 text-[11px] text-ink/50">
+              📸 You can also send reference photos directly on WhatsApp after booking.
+            </p>
+          </div>
 
-            {/* Inspiration Pictures Note */}
-            <div className="rounded-xl bg-amber-50/70 border border-amber-200/80 p-3.5 text-xs text-amber-950 flex items-start gap-2.5">
-              <span className="text-base shrink-0">📸</span>
-              <div>
-                <span className="font-bold">Inspiration Pictures:</span>
-                <p className="mt-0.5 text-amber-900/80 leading-relaxed">
-                  Have pictures of your desired style or current hair condition? You can attach them directly in WhatsApp after clicking Book!
-                </p>
+          {/* Paystack Sandbox Notice when Paystack mode is active */}
+          {bookingMode === "paystack" && (
+            <div className="rounded-2xl border border-emerald-deep/20 bg-nude/40 p-4 text-xs text-ink/80">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-emerald-deep">Paystack Sandbox Deposit</span>
+                <span className="rounded-md bg-emerald-deep text-white px-2 py-0.5 font-bold">
+                  GHS {depositAmount}.00
+                </span>
               </div>
+              <p className="text-ink/65 leading-relaxed">
+                Test checkout supports simulated Mobile Money (MTN, Telecel) and card payments. This secures your reservation without needing real funds.
+              </p>
             </div>
+          )}
 
-            {/* Action Buttons */}
-            <div className="pt-2 flex flex-col sm:flex-row gap-3">
+          {/* Action Button */}
+          <div className="pt-2">
+            {bookingMode === "whatsapp" ? (
               <button
                 type="submit"
-                className="flex-1 shimmer flex items-center justify-center gap-2 rounded-xl bg-[#25D366] py-3.5 px-6 font-bold text-white shadow-lg hover:bg-[#20ba59] transition-all hover:scale-[1.01] active:scale-[0.99]"
+                className="shimmer w-full flex items-center justify-center gap-2 rounded-2xl bg-emerald-deep py-4 text-sm font-bold text-white shadow-lg hover:bg-emerald-deep/90 transition-all hover:scale-[1.01] active:scale-[0.99]"
               >
-                <span>Send Booking to WhatsApp</span>
-                <span>💬</span>
+                <span>Reserve on WhatsApp</span>
+                <span>→</span>
               </button>
-
+            ) : (
               <button
-                type="button"
-                onClick={handleCopy}
-                className="flex items-center justify-center gap-2 rounded-xl border border-rose-gold/40 bg-white py-3.5 px-5 text-sm font-semibold text-emerald-deep hover:bg-nude/50 transition-colors"
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#1b4332] py-4 text-sm font-bold text-white shadow-lg hover:bg-[#163829] transition-all disabled:opacity-75"
               >
-                {copied ? (
-                  <>
-                    <span className="text-emerald-deep">✓</span>
-                    <span>Copied!</span>
-                  </>
+                {isSubmitting ? (
+                  <span>Connecting to Paystack Sandbox...</span>
                 ) : (
                   <>
-                    <span>📋</span>
-                    <span>Copy Text</span>
+                    <span>Proceed with Paystack Sandbox (GHS {depositAmount}.00)</span>
+                    <span>→</span>
                   </>
                 )}
               </button>
-            </div>
-          </form>
-        </div>
-
-        {/* WhatsApp Preview Column (7 Cols on right or tab on mobile) */}
-        <div
-          className={`bg-[#e5ddd5] p-4 sm:p-7 lg:col-span-5 flex flex-col justify-between border-t lg:border-t-0 lg:border-l border-rose-gold/20 ${
-            activeTab === "form" ? "hidden lg:flex" : "flex"
-          }`}
-        >
-          <div>
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-black/10">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#075E54]">
-                💬 Live WhatsApp Message Preview
-              </span>
-              <span className="text-[11px] bg-white/70 px-2.5 py-0.5 rounded-full text-ink/70">
-                To: +233 24 056 5892
-              </span>
-            </div>
-
-            {/* WhatsApp Chat Bubble */}
-            <div className="relative rounded-2xl bg-white p-4 shadow-sm border border-black/5 text-xs sm:text-[13px] text-ink leading-relaxed space-y-2">
-              <p className="font-semibold text-emerald-deep">
-                Thank you for contacting Lovely Fobie Glam and Health Consult! Please let us know how we can help you.
-              </p>
-              <p className="text-ink/80 text-[12px] bg-nude/60 p-2 rounded-lg border border-rose-gold/15">
-                Our working days are Monday, Tuesday, Wednesday,Friday and Saturday. Time: 9am to 8pm. Booking times are 9am, 12pm and 3pm
-              </p>
-
-              <div className="font-bold text-[#075E54] pt-1">
-                ✨ HAIR APPOINTMENT BOOKING FORM ✨
-                <br />
-                <span className="font-normal text-ink/70 text-xs">
-                  Lovely Fobie Glam and Health Consult
-                </span>
-              </div>
-
-              <p className="italic text-ink/70 text-xs">
-                Please fill in the details below to secure your appointment 😊
-              </p>
-
-              <div className="space-y-1.5 pt-1 border-t border-ink/10 font-mono text-xs">
-                <div>
-                  <span className="font-bold">👤 Full Name:</span>{" "}
-                  <span className="text-emerald-deep font-semibold">
-                    {formData.fullName || "(Not filled yet)"}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-bold">📞 Phone Number:</span>{" "}
-                  <span>{formData.phone || "(Not filled yet)"}</span>
-                </div>
-                <div>
-                  <span className="font-bold">📅 Preferred Date:</span>{" "}
-                  <span className="text-emerald-deep font-semibold">
-                    {formData.preferredDate || "(Select date)"}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-bold">⏰ Preferred Time:</span>{" "}
-                  <span className="text-emerald-deep font-semibold">
-                    {formData.preferredTime}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-bold">💇🏽‍♀️ Service Needed:</span>{" "}
-                  <span>{formData.serviceNeeded}</span>
-                </div>
-                <div>
-                  <span className="font-bold">🧵 Hair Type:</span>{" "}
-                  <span>{formData.hairType}</span>
-                </div>
-                <div>
-                  <span className="font-bold">📏 Hair Length:</span>{" "}
-                  <span>{formData.hairLength}</span>
-                </div>
-                <div>
-                  <span className="font-bold">🎨 Preferred Style:</span>{" "}
-                  <span>{formData.preferredStyle || "(Describe or leave blank)"}</span>
-                </div>
-                <div className="text-amber-800 text-[11px] pt-1">
-                  📸 Please send inspiration pictures if available.
-                </div>
-              </div>
-
-              <div className="rounded-xl bg-amber-50 p-2.5 text-[11px] text-amber-950 border border-amber-200/60 mt-2 space-y-0.5">
-                <span className="font-bold text-amber-900 block">⚠️ Salon Policy:</span>
-                <p>• Please come on time</p>
-                <p>• You can make a deposit before the service</p>
-                <p>• Hair should be unbraided before coming unless very tangled and must be included in the service</p>
-                <p>• Late arrivals beyond 30minutes may be rescheduled.</p>
-              </div>
-
-              <p className="font-serif font-bold text-emerald-deep pt-1 text-center">
-                Thank you for booking with us 💕
-              </p>
-
-              {/* Message metadata (time & checkmark) */}
-              <div className="flex justify-end items-center gap-1 text-[10px] text-ink/40 pt-1">
-                <span>Just now</span>
-                <span className="text-[#34B7F1] font-bold">✓✓</span>
-              </div>
-            </div>
+            )}
           </div>
-
-          {/* Quick Direct Link */}
-          <div className="mt-5 pt-4 border-t border-black/10">
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#25D366] py-3 text-xs sm:text-sm font-bold text-white shadow-md hover:bg-[#20ba59] transition-all text-center"
-            >
-              <span>🚀 Open in WhatsApp Now</span>
-            </a>
-            <p className="text-[11px] text-ink/60 text-center mt-2">
-              Opens WhatsApp directly with the pre-filled message above.
-            </p>
-          </div>
-        </div>
+        </form>
       </div>
     </div>
   );
