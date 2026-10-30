@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+// Fallback test key ensures Paystack Sandbox functions even if env var is not yet added on Vercel
+const DEFAULT_TEST_SECRET_KEY = "sk_test_029a6fd5bf9066123f18951003b234c0a3daf331";
+
 type PaystackInitializeResponse = {
   status: boolean;
   message: string;
@@ -60,70 +63,65 @@ export async function POST(request: Request) {
     );
   }
 
-  const origin = request.headers.get("origin") || request.headers.get("referer") || "http://localhost:3000";
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
-  const callbackUrl = `${siteUrl.replace(/\/$/, "")}/contact?status=deposit_success`;
+  // Dynamically resolve protocol and host from request headers
+  const host =
+    request.headers.get("x-forwarded-host") ||
+    request.headers.get("host") ||
+    "lovely-fobie.vercel.app";
+  const proto =
+    request.headers.get("x-forwarded-proto") ||
+    (host.includes("localhost") ? "http" : "https");
+  const callbackUrl = `${proto}://${host}/contact?status=deposit_success`;
 
-  const secretKey = process.env.PAYSTACK_SECRET_KEY;
+  // Use configured key or default sandbox test key
+  const secretKey = process.env.PAYSTACK_SECRET_KEY || DEFAULT_TEST_SECRET_KEY;
 
-  // If secret key is provided, initialize standard Paystack checkout
-  if (secretKey) {
-    try {
-      const paystackResponse = await fetch(
-        "https://api.paystack.co/transaction/initialize",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${secretKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email,
-            amount: amountInPesewas,
-            currency: "GHS",
-            callback_url: callbackUrl,
-            metadata: isRecord(metadata) ? metadata : {},
-          }),
-          cache: "no-store",
+  try {
+    const paystackResponse = await fetch(
+      "https://api.paystack.co/transaction/initialize",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          email,
+          amount: amountInPesewas,
+          currency: "GHS",
+          callback_url: callbackUrl,
+          metadata: isRecord(metadata) ? metadata : {},
+        }),
+        cache: "no-store",
+      },
+    );
 
-      const result: unknown = await paystackResponse.json();
+    const result: unknown = await paystackResponse.json();
 
-      if (
-        isRecord(result) &&
-        result.status === true &&
-        isRecord(result.data) &&
-        typeof result.data.authorization_url === "string"
-      ) {
-        return NextResponse.json({
-          authorization_url: result.data.authorization_url,
-          reference: result.data.reference ?? `LFG-${Date.now()}`,
-          isSandboxDemo: false,
-        });
-      }
-
-      const errorMessage =
-        isRecord(result) && typeof result.message === "string"
-          ? result.message
-          : "Paystack initialization failed.";
-
-      return NextResponse.json({ error: errorMessage }, { status: 502 });
-    } catch (error) {
-      console.error("Paystack transaction initialization request failed.", error);
-      return NextResponse.json(
-        { error: "Unable to connect to Paystack. Please try again." },
-        { status: 502 },
-      );
+    if (
+      isRecord(result) &&
+      result.status === true &&
+      isRecord(result.data) &&
+      typeof result.data.authorization_url === "string"
+    ) {
+      return NextResponse.json({
+        authorization_url: result.data.authorization_url,
+        reference: result.data.reference ?? `LFG-${Date.now()}`,
+        status: true,
+      });
     }
-  }
 
-  // Graceful Sandbox Simulation:
-  const testRef = `PSTK-TEST-${Date.now().toString(36).toUpperCase()}`;
-  return NextResponse.json({
-    authorization_url: `${callbackUrl}&reference=${testRef}`,
-    reference: testRef,
-    isSandboxDemo: true,
-    message: "Sandbox test mode initialized.",
-  });
+    const errorMessage =
+      isRecord(result) && typeof result.message === "string"
+        ? result.message
+        : "Paystack initialization failed.";
+
+    return NextResponse.json({ error: errorMessage }, { status: 502 });
+  } catch (error) {
+    console.error("Paystack transaction initialization request failed.", error);
+    return NextResponse.json(
+      { error: "Unable to connect to Paystack. Please try again." },
+      { status: 502 },
+    );
+  }
 }
